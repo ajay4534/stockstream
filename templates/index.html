@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StockStream - Real-time Stock and Crypto Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-chart-line"></i> StockStream</h1>
+            <p>Real-time Stock and Crypto Tracker</p>
+        </div>
+
+        <div class="search-container">
+            <div class="search-wrapper">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" 
+                       id="searchInput" 
+                       class="search-input" 
+                       placeholder="Search for stocks or cryptocurrencies..."
+                       autocomplete="off">
+            </div>
+            <div id="searchResults" class="search-results"></div>
+        </div>
+
+        <div class="grid-container">
+            <h2 class="section-title">
+                <i class="fab fa-bitcoin"></i>
+                Cryptocurrencies
+            </h2>
+            <div id="cryptoGrid" class="grid">
+                <!-- Crypto cards will be added here -->
+            </div>
+
+            <h2 class="section-title">
+                <i class="fas fa-chart-bar"></i>
+                Stocks
+            </h2>
+            <div id="stockGrid" class="grid">
+                <!-- Stock cards will be added here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Pass the default values from Flask to JavaScript
+        const defaultCrypto = '{{ default_crypto | tojson | safe }}';
+        const defaultStocks = '{{ default_stocks | tojson | safe }}';
+    </script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
