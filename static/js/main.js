@@ -1,231 +1,234 @@
-let trackedCrypto = new Set();
-let trackedStocks = new Set();
-let isUpdating = false;
-let lastUpdateTime = new Date();
+// Global variables
+let marketChart = null;
+let currentTimeframe = '1d';
+let priceChart = null;
 
-// Initialize with default values
-try {
-    console.log('Default crypto data:', defaultCrypto);
-    console.log('Default stocks data:', defaultStocks);
-    trackedCrypto = new Set(JSON.parse(defaultCrypto));
-    trackedStocks = new Set(JSON.parse(defaultStocks));
-    console.log('Initialized sets:', {
-        crypto: Array.from(trackedCrypto),
-        stocks: Array.from(trackedStocks)
-    });
+// Initialize tabs
+function initializeTabs() {
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            // Remove active class from all buttons and panes
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+            
+            // Add active class to clicked button and corresponding pane
+            button.classList.add('active');
+            const tabId = button.getAttribute('data-tab');
+            document.getElementById(tabId).classList.add('active');
 
-    // Create initial cards for default values
-    trackedCrypto.forEach(symbol => {
-        createAssetCard(symbol, symbol, 'crypto');
-    });
-    trackedStocks.forEach(symbol => {
-        createAssetCard(symbol, symbol, 'stock');
-    });
-
-    // Start price updates
-    updatePrices();
-    setInterval(updatePrices, 30000); // Update every 30 seconds
-} catch (error) {
-    console.error('Error initializing tracked assets:', error);
-    trackedCrypto = new Set();
-    trackedStocks = new Set();
-}
-
-function createAssetCard(symbol, name, type) {
-    const card = document.createElement('div');
-    card.className = `asset-card ${type}`;
-    card.id = `card-${symbol}`;
-    
-    const icon = type === 'crypto' ? 
-        '<i class="fab fa-bitcoin"></i>' : 
-        '<i class="fas fa-chart-line"></i>';
-    
-    card.innerHTML = `
-        <div class="card-header">
-            ${icon}
-            <div class="symbol">${name}</div>
-            <button class="remove-btn" onclick="removeSymbol('${symbol}', '${type}')">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        <div class="price loading" id="price-${symbol}">
-            <i class="fas fa-sync-alt fa-spin"></i> Loading...
-        </div>
-        <div class="update-time" id="update-${symbol}">
-            <i class="far fa-clock"></i>
-        </div>
-    `;
-    return card;
-}
-
-function removeSymbol(symbol, type) {
-    const card = document.getElementById(`card-${symbol}`);
-    if (card) {
-        card.remove();
-    }
-    
-    if (type === 'crypto') {
-        trackedCrypto.delete(symbol);
-    } else if (type === 'stock') {
-        trackedStocks.delete(symbol);
-    }
-    
-    updatePrices();
-}
-
-async function updatePrices() {
-    if (isUpdating) {
-        console.log('Update already in progress, skipping...');
-        return;
-    }
-    isUpdating = true;
-
-    const cryptoSymbols = Array.from(trackedCrypto).join(',');
-    const stockSymbols = Array.from(trackedStocks).join(',');
-    
-    if (!cryptoSymbols && !stockSymbols) {
-        isUpdating = false;
-        return;
-    }
-
-    console.log('Fetching prices for:', { crypto: cryptoSymbols, stocks: stockSymbols });
-    
-    try {
-        const response = await fetch(`/get_prices?crypto=${encodeURIComponent(cryptoSymbols)}&stocks=${encodeURIComponent(stockSymbols)}`);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        console.log('Received price data:', data);
-        
-        if (Object.keys(data).length === 0) {
-            console.warn('No price data received');
-            return;
-        }
-
-        lastUpdateTime = new Date();
-        
-        // Update all price elements to show they're refreshing
-        document.querySelectorAll('.price').forEach(el => {
-            if (!el.classList.contains('loading')) {
-                el.classList.add('loading');
-                el.textContent = 'Refreshing...';
+            // Update content based on selected tab
+            switch(tabId) {
+                case 'stocks':
+                    updateStocksWatchlist();
+                    break;
+                case 'crypto':
+                    updateCryptoWatchlist();
+                    break;
+                case 'lottery':
+                    updateLotteryData();
+                    break;
+                default:
+                    updateWatchlists();
             }
         });
+    });
+}
 
-        // Process received data
-        for (const [symbol, info] of Object.entries(data)) {
-            const priceElement = document.getElementById(`price-${symbol}`);
-            const updateElement = document.getElementById(`update-${symbol}`);
-            
-            if (priceElement && info && typeof info.price === 'number') {
-                priceElement.textContent = `$${info.price.toFixed(2)}`;
-                priceElement.classList.remove('loading');
-                if (updateElement) {
-                    updateElement.textContent = `Last updated: ${lastUpdateTime.toLocaleTimeString()}`;
-                }
+// Update watchlists
+async function updateWatchlists() {
+    await updateStocksWatchlist();
+    await updateCryptoWatchlist();
+}
+
+// Update stocks watchlist
+async function updateStocksWatchlist() {
+    try {
+        const response = await fetch('/api/current_prices?type=stock');
+        const stocks = await response.json();
+        
+        const watchlist = document.getElementById('stocks-watchlist');
+        if (watchlist && stocks && !stocks.error) {
+            watchlist.innerHTML = stocks.map(stock => `
+                <div class="asset-item">
+                    <div class="asset-info">
+                        <div class="asset-symbol">${stock.symbol}</div>
+                        <div class="asset-name">${stock.name || stock.symbol}</div>
+                    </div>
+                    <div class="asset-data">
+                        <div class="asset-price">$${stock.price.toFixed(2)}</div>
+                        <div class="asset-change ${stock.change >= 0 ? 'positive' : 'negative'}">
+                            ${stock.change >= 0 ? '+' : ''}${stock.change.toFixed(2)}%
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        } else if (stocks.error) {
+            watchlist.innerHTML = '<div class="error">Failed to load stocks</div>';
+        }
+    } catch (error) {
+        console.error('Error updating stocks watchlist:', error);
+        const watchlist = document.getElementById('stocks-watchlist');
+        if (watchlist) {
+            watchlist.innerHTML = '<div class="error">Failed to load stocks</div>';
+        }
+    }
+}
+
+// Update crypto watchlist
+async function updateCryptoWatchlist() {
+    try {
+        const response = await fetch('/api/current_prices?type=crypto');
+        const cryptos = await response.json();
+        
+        const watchlist = document.getElementById('crypto-watchlist');
+        if (watchlist && cryptos && !cryptos.error) {
+            watchlist.innerHTML = cryptos.map(crypto => `
+                <div class="asset-item">
+                    <div class="asset-info">
+                        <div class="asset-symbol">${crypto.symbol}</div>
+                        <div class="asset-name">${crypto.name || crypto.symbol}</div>
+                    </div>
+                    <div class="asset-data">
+                        <div class="asset-price">$${crypto.price.toFixed(2)}</div>
+                        <div class="asset-change ${crypto.change >= 0 ? 'positive' : 'negative'}">
+                            ${crypto.change >= 0 ? '+' : ''}${crypto.change.toFixed(2)}%
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        } else if (cryptos.error) {
+            watchlist.innerHTML = '<div class="error">Failed to load cryptocurrencies</div>';
+        }
+    } catch (error) {
+        console.error('Error updating crypto watchlist:', error);
+        const watchlist = document.getElementById('crypto-watchlist');
+        if (watchlist) {
+            watchlist.innerHTML = '<div class="error">Failed to load cryptocurrencies</div>';
+        }
+    }
+}
+
+// Update lottery data
+async function updateLotteryData() {
+    try {
+        const response = await fetch('/api/lottery/latest');
+        const data = await response.json();
+        
+        const lotteryResults = document.getElementById('lottery-results');
+        
+        if (lotteryResults) {
+            if (data.error) {
+                lotteryResults.innerHTML = '<div class="error">Failed to load lottery results</div>';
             } else {
-                console.warn(`Invalid price data for ${symbol}:`, info);
-                if (priceElement) {
-                    priceElement.textContent = 'Price unavailable';
-                    priceElement.classList.remove('loading');
-                }
+                lotteryResults.innerHTML = `
+                    <div class="lottery-section">
+                        <div class="lottery-card">
+                            <h2>Powerball</h2>
+                            <div class="lottery-info">
+                                <p><strong>Draw Date:</strong> ${data.powerball.drawDate}</p>
+                                <p><strong>Winning Numbers:</strong></p>
+                                <div class="lottery-numbers">
+                                    ${data.powerball.numbers.map(num => `<span class="lottery-number">${num}</span>`).join('')}
+                                    <span class="lottery-number powerball">${data.powerball.powerball}</span>
+                                </div>
+                                <p><strong>Next Draw:</strong> ${data.powerball.nextDraw}</p>
+                                <p><strong>Estimated Jackpot:</strong> $${data.powerball.estimatedJackpot}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="lottery-card">
+                            <h2>Mega Millions</h2>
+                            <div class="lottery-info">
+                                <p><strong>Draw Date:</strong> ${data.megaMillions.drawDate}</p>
+                                <p><strong>Winning Numbers:</strong></p>
+                                <div class="lottery-numbers">
+                                    ${data.megaMillions.numbers.map(num => `<span class="lottery-number">${num}</span>`).join('')}
+                                    <span class="lottery-number mega-ball">${data.megaMillions.megaBall}</span>
+                                </div>
+                                <p><strong>Next Draw:</strong> ${data.megaMillions.nextDraw}</p>
+                                <p><strong>Estimated Jackpot:</strong> $${data.megaMillions.estimatedJackpot}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
             }
         }
     } catch (error) {
-        console.error('Error fetching prices:', error);
-        // Show error state for all loading prices
-        document.querySelectorAll('.price.loading').forEach(el => {
-            el.textContent = 'Error loading price';
-            el.classList.remove('loading');
-        });
-    } finally {
-        isUpdating = false;
+        console.error('Error updating lottery data:', error);
+        const lotteryResults = document.getElementById('lottery-results');
+        if (lotteryResults) {
+            lotteryResults.innerHTML = '<div class="error">Failed to load lottery results</div>';
+        }
     }
 }
 
-let searchTimeout;
-const searchInput = document.getElementById('searchInput');
-const searchResults = document.getElementById('searchResults');
-const cryptoGrid = document.getElementById('cryptoGrid');
-const stockGrid = document.getElementById('stockGrid');
-
-searchInput.addEventListener('input', (e) => {
-    const query = e.target.value.trim();
-    
-    clearTimeout(searchTimeout);
-    
-    if (!query) {
-        searchResults.style.display = 'none';
-        return;
+// Update performance graphs
+async function updateGraphs() {
+    try {
+        const response = await fetch('/api/dashboard/graphs');
+        const graphs = await response.json();
+        
+        // Update stocks graph
+        const stocksGraph = document.getElementById('stocks-graph');
+        if (stocksGraph && graphs.stocks) {
+            Plotly.newPlot('stocks-graph', graphs.stocks.data, graphs.stocks.layout);
+        }
+        
+        // Update crypto graph
+        const cryptoGraph = document.getElementById('crypto-graph');
+        if (cryptoGraph && graphs.crypto) {
+            Plotly.newPlot('crypto-graph', graphs.crypto.data, graphs.crypto.layout);
+        }
+    } catch (error) {
+        console.error('Error updating graphs:', error);
+        // Show error message in graph containers
+        const stocksGraph = document.getElementById('stocks-graph');
+        const cryptoGraph = document.getElementById('crypto-graph');
+        if (stocksGraph) {
+            stocksGraph.innerHTML = '<div class="error">Failed to load stock performance graph</div>';
+        }
+        if (cryptoGraph) {
+            cryptoGraph.innerHTML = '<div class="error">Failed to load crypto performance graph</div>';
+        }
     }
-    
-    searchTimeout = setTimeout(() => {
-        // Search for both crypto and stocks
-        Promise.all([
-            fetch(`/search_coins?q=${query}`).then(res => res.json()),
-            fetch(`/search_stocks?q=${query}`).then(res => res.json())
-        ]).then(([cryptoResults, stockResults]) => {
-            searchResults.innerHTML = '';
-            
-            // Add crypto results
-            cryptoResults.forEach(coin => {
-                const div = document.createElement('div');
-                div.className = 'search-result-item';
-                div.textContent = `${coin.name} (Crypto)`;
-                div.onclick = () => {
-                    if (!trackedCrypto.has(coin.id)) {
-                        trackedCrypto.add(coin.id);
-                        cryptoGrid.appendChild(createAssetCard(coin.id, coin.name, 'crypto'));
-                        updatePrices();
-                    }
-                    searchInput.value = '';
-                    searchResults.style.display = 'none';
-                };
-                searchResults.appendChild(div);
-            });
-            
-            // Add stock results
-            stockResults.forEach(stock => {
-                const div = document.createElement('div');
-                div.className = 'search-result-item';
-                div.textContent = `${stock.name} (Stock)`;
-                div.onclick = () => {
-                    if (!trackedStocks.has(stock.symbol)) {
-                        trackedStocks.add(stock.symbol);
-                        stockGrid.appendChild(createAssetCard(stock.symbol, stock.name, 'stock'));
-                        updatePrices();
-                    }
-                    searchInput.value = '';
-                    searchResults.style.display = 'none';
-                };
-                searchResults.appendChild(div);
-            });
-            
-            searchResults.style.display = 
-                (cryptoResults.length + stockResults.length) ? 'block' : 'none';
-        });
-    }, 300);
-});
+}
 
-document.addEventListener('click', (e) => {
-    if (!searchResults.contains(e.target) && e.target !== searchInput) {
-        searchResults.style.display = 'none';
-    }
-});
-
+// Initialize everything when the page loads
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('Initializing grids with default assets');
-    const cryptoGrid = document.getElementById('cryptoGrid');
-    const stockGrid = document.getElementById('stockGrid');
+    // Initialize tabs
+    initializeTabs();
 
-    trackedCrypto.forEach(symbol => {
-        console.log('Adding crypto card:', symbol);
-        cryptoGrid.appendChild(createAssetCard(symbol, symbol, 'crypto'));
-    });
+    // Initial updates
+    updateWatchlists();
+    updateGraphs();
+    updateLotteryData();
 
-    trackedStocks.forEach(symbol => {
-        console.log('Adding stock card:', symbol);
-        stockGrid.appendChild(createAssetCard(symbol, symbol, 'stock'));
-    });
+    // Set up periodic updates
+    setInterval(updateWatchlists, 60000); // Update watchlists every minute
+    setInterval(updateGraphs, 3600000);   // Update graphs every hour
+    setInterval(updateLotteryData, 3600000); // Update lottery every hour
 });
+
+// Show notification
+function showNotification(message, type = 'info') {
+    // You can implement a notification system here
+    console.log(`${type.toUpperCase()}: ${message}`);
+}
+
+// Format currency
+function formatCurrency(value) {
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD'
+    }).format(value);
+}
+
+// Format percentage
+function formatPercentage(value) {
+    return new Intl.NumberFormat('en-US', {
+        style: 'percent',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(value / 100);
+}

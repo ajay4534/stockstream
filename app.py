@@ -1,248 +1,472 @@
-from flask import Flask, jsonify, render_template, request, redirect, url_for, flash
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
-from pymongo import MongoClient
-from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
-from bson import ObjectId
-import os
-import logging
+from flask import Flask, render_template, jsonify, request
 from dotenv import load_dotenv
+import os
 import requests
-from yahoo_fin import stock_info
+import json
+from pymongo import MongoClient
+import logging
 import certifi
+from datetime import datetime, timedelta
+import yfinance as yf
 
 # Load environment variables
 load_dotenv()
 
-# Create Flask app with explicit template and static folders
-app = Flask(
-    __name__,
-    template_folder=os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates')),
-    static_folder=os.path.abspath(os.path.join(os.path.dirname(__file__), 'static'))
-)
-
-app.secret_key = os.getenv('SECRET_KEY')
-
-# Configure logging
+app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
-logger = app.logger
+logger = logging.getLogger(__name__)
 
-# MongoDB Atlas setup with error handling
+# MongoDB setup
+MONGODB_URI = os.getenv('MONGODB_URI')
 try:
-    # Use certifi for SSL certificate verification
-    client = MongoClient(os.getenv('MONGO_URI'), tlsCAFile=certifi.where())
-    # Test the connection
-    client.admin.command('ping')
-    db = client[os.getenv('MONGO_DB_NAME')]
-    users_collection = db['users']
-    watchlist_collection = db['watchlists']
+    client = MongoClient(MONGODB_URI, tlsCAFile=certifi.where())
+    db = client.stockstream
+    lottery_collection = db.lottery_results
+    prices_collection = db.prices
     logger.info("Successfully connected to MongoDB Atlas")
-except (ConnectionFailure, ServerSelectionTimeoutError) as e:
-    logger.error(f"Failed to connect to MongoDB Atlas: {str(e)}")
-    raise
+except Exception as e:
+    logger.error(f"Error connecting to MongoDB Atlas: {str(e)}")
+    db = None
 
-# Login manager setup
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
+# Market data endpoints
+STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA']  # Top 5 stocks
+CRYPTO = ['BTC-USD', 'ETH-USD', 'BNB-USD', 'SOL-USD', 'XRP-USD']  # Top 5 cryptos
 
-class User(UserMixin):
-    def __init__(self, user_data):
-        self.user_data = user_data
-        self.id = str(user_data['_id'])  # Ensure id is string for Flask-Login
-
-    def get_id(self):
-        return self.id
-
-@login_manager.user_loader
-def load_user(user_id):
+@app.route('/api/market/summary')
+def get_market_summary():
     try:
-        user_data = users_collection.find_one({'_id': ObjectId(user_id)})
-        return User(user_data) if user_data else None
+        # Fetch data for major indices and BTC
+        symbols = ['^GSPC', '^IXIC', 'BTC-USD']
+        data = {}
+        
+        for symbol in symbols:
+            try:
+                ticker = yf.Ticker(symbol)
+                info = ticker.fast_info  # Use fast_info instead of info
+                current = float(info.last_price if hasattr(info, 'last_price') else 0)
+                prev_close = float(info.previous_close if hasattr(info, 'previous_close') else current)
+                change = ((current - prev_close) / prev_close * 100) if prev_close else 0
+                
+                data[symbol] = {
+                    'price': current,
+                    'change': round(change, 2)
+                }
+            except Exception as e:
+                logger.error(f"Error fetching data for {symbol}: {str(e)}")
+                data[symbol] = {
+                    'price': 0,
+                    'change': 0
+                }
+        
+        return jsonify(data)
     except Exception as e:
-        logger.error(f"Error loading user: {str(e)}")
-        return None
+        logger.error(f"Error fetching market summary: {str(e)}")
+        return jsonify({'error': 'Failed to fetch market data'}), 500
 
-# Default symbols to track
-DEFAULT_CRYPTO = ['bitcoin', 'ethereum', 'dogecoin']
-DEFAULT_STOCKS = ['MSFT', 'SPY', 'DIA', 'TSLA']
-
-def get_crypto_prices(symbols):
-    """
-    Fetch cryptocurrency prices using CoinGecko API.
-    """
+@app.route('/api/market/movers')
+def get_market_movers():
     try:
-        if not symbols:
-            return {}
+        # List of popular stocks to track
+        symbols = STOCKS
+        movers = []
         
-        symbols_str = ','.join(symbols)
-        response = requests.get(
-            f'https://api.coingecko.com/api/v3/simple/price?ids={symbols_str}&vs_currencies=usd'
-        )
-        response.raise_for_status()
-        data = response.json()
-        return {symbol: {'price': price['usd'], 'type': 'crypto'} for symbol, price in data.items()}
+        for symbol in symbols:
+            try:
+                ticker = yf.Ticker(symbol)
+                info = ticker.fast_info  # Use fast_info instead of info
+                current = float(info.last_price if hasattr(info, 'last_price') else 0)
+                prev_close = float(info.previous_close if hasattr(info, 'previous_close') else current)
+                change = ((current - prev_close) / prev_close * 100) if prev_close else 0
+                
+                movers.append({
+                    'symbol': symbol,
+                    'price': current,
+                    'change': round(change, 2)
+                })
+            except Exception as e:
+                logger.error(f"Error fetching data for {symbol}: {str(e)}")
+                continue
+        
+        # Sort by absolute change percentage
+        movers.sort(key=lambda x: abs(x['change']), reverse=True)
+        return jsonify(movers[:5])  # Return top 5 movers
     except Exception as e:
-        logger.error(f"Error fetching crypto prices: {e}")
-        return {}
+        logger.error(f"Error fetching market movers: {str(e)}")
+        return jsonify({'error': 'Failed to fetch market movers'}), 500
 
-def get_stock_prices(symbols):
-    """
-    Fetch stock prices using Yahoo Finance.
-    """
-    data = {}
-    for symbol in symbols:
-        try:
-            current_price = stock_info.get_live_price(symbol)
-            if current_price:
-                logger.info(f"Got price for {symbol}: ${current_price}")
-                data[symbol] = {'price': float(current_price), 'type': 'stock'}
-            else:
-                logger.warning(f"No price data available for {symbol}")
-        except Exception as e:
-            logger.error(f"Error fetching price for {symbol}: {e}")
-            continue
-    
-    logger.info(f"Final stock data: {data}")
-    return data
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
+@app.route('/api/historical/<symbol>')
+def get_historical_data(symbol):
+    try:
+        timeframe = request.args.get('timeframe', '1d')
         
-        user = users_collection.find_one({'email': email})
-        
-        if user and check_password_hash(user['password'], password):
-            login_user(User(user))
-            return redirect(url_for('index'))
-        
-        flash('Invalid email or password')
-    return render_template('login.html')
-
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        username = request.form.get('username')
-        email = request.form.get('email')
-        password = request.form.get('password')
-        confirm_password = request.form.get('confirm_password')
-        
-        if password != confirm_password:
-            flash('Passwords do not match')
-            return render_template('register.html')
-        
-        if users_collection.find_one({'email': email}):
-            flash('Email already registered')
-            return render_template('register.html')
-        
-        hashed_password = generate_password_hash(password)
-        user_data = {
-            'username': username,
-            'email': email,
-            'password': hashed_password,
-            'watchlist': []
+        # Convert timeframe to yfinance interval and period
+        intervals = {
+            '1d': ('5m', '1d'),
+            '1w': ('15m', '1wk'),
+            '1m': ('1d', '1mo'),
+            '1y': ('1d', '1y')
         }
         
-        users_collection.insert_one(user_data)
-        flash('Registration successful! Please login.')
-        return redirect(url_for('login'))
+        interval, period = intervals.get(timeframe, ('5m', '1d'))
+        
+        # Fetch historical data
+        ticker = yf.Ticker(symbol)
+        history = ticker.history(period=period, interval=interval)
+        
+        # Convert timestamps to string format and ensure all values are JSON serializable
+        data = {
+            'timestamps': [ts.strftime('%Y-%m-%d %H:%M:%S') for ts in history.index],
+            'prices': [float(price) for price in history['Close'].tolist()]
+        }
+        
+        return jsonify(data)
+    except Exception as e:
+        logger.error(f"Error fetching historical data: {str(e)}")
+        return jsonify({'error': 'Failed to fetch historical data'}), 500
+
+@app.route('/api/stocks/search')
+def stocks_search():
+    try:
+        query = request.args.get('q', '').upper()
+        if not query:
+            return jsonify([])
+        
+        # List of major stocks for demo
+        demo_stocks = {
+            'AAPL': 'Apple Inc.',
+            'MSFT': 'Microsoft Corporation',
+            'GOOGL': 'Alphabet Inc.',
+            'AMZN': 'Amazon.com Inc.',
+            'TSLA': 'Tesla Inc.',
+            'META': 'Meta Platforms Inc.',
+            'NVDA': 'NVIDIA Corporation'
+        }
+        
+        # Filter stocks based on query
+        matching_symbols = [
+            {'symbol': symbol, 'name': name}
+            for symbol, name in demo_stocks.items()
+            if query in symbol or query.lower() in name.lower()
+        ]
+        
+        return jsonify(matching_symbols)
+    except Exception as e:
+        logger.error(f"Error searching stocks: {str(e)}")
+        return jsonify({'error': 'Failed to search stocks'}), 500
+
+@app.route('/api/crypto/search')
+def crypto_search():
+    try:
+        query = request.args.get('q', '').upper()
+        if not query:
+            return jsonify([])
+        
+        # Demo list of cryptocurrencies
+        demo_crypto = {
+            'BTC-USD': 'Bitcoin',
+            'ETH-USD': 'Ethereum',
+            'DOGE-USD': 'Dogecoin',
+            'ADA-USD': 'Cardano',
+            'SOL-USD': 'Solana'
+        }
+        
+        # Filter crypto based on query
+        matching_symbols = [
+            {'symbol': symbol, 'name': name}
+            for symbol, name in demo_crypto.items()
+            if query in symbol or query.lower() in name.lower()
+        ]
+        
+        return jsonify(matching_symbols)
+    except Exception as e:
+        logger.error(f"Error searching cryptocurrencies: {str(e)}")
+        return jsonify({'error': 'Failed to search cryptocurrencies'}), 500
+
+@app.route('/api/lottery/latest')
+def get_latest_lottery():
+    try:
+        # For demo purposes, return static lottery data
+        # In a real app, this would come from an API or database
+        lottery_data = {
+            "powerball": {
+                "drawDate": datetime.now().strftime("%Y-%m-%d"),
+                "numbers": [7, 15, 23, 32, 45],
+                "powerball": 12,
+                "nextDraw": (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d"),
+                "estimatedJackpot": "80 Million"
+            },
+            "megaMillions": {
+                "drawDate": datetime.now().strftime("%Y-%m-%d"),
+                "numbers": [3, 19, 28, 37, 51],
+                "megaBall": 8,
+                "nextDraw": (datetime.now() + timedelta(days=4)).strftime("%Y-%m-%d"),
+                "estimatedJackpot": "95 Million"
+            }
+        }
+        return jsonify(lottery_data)
+    except Exception as e:
+        logger.error(f"Error fetching lottery data: {str(e)}")
+        return jsonify({'error': 'Failed to fetch lottery data'}), 500
+
+# Price data routes
+@app.route('/api/current_prices')
+def get_current_prices():
+    try:
+        asset_type = request.args.get('type', 'stock')
+        symbols = STOCKS if asset_type == 'stock' else CRYPTO
+        
+        # Define common names for assets
+        asset_names = {
+            'AAPL': 'Apple Inc.',
+            'MSFT': 'Microsoft Corp.',
+            'GOOGL': 'Alphabet Inc.',
+            'AMZN': 'Amazon.com Inc.',
+            'NVDA': 'NVIDIA Corp.',
+            'BTC-USD': 'Bitcoin',
+            'ETH-USD': 'Ethereum',
+            'BNB-USD': 'Binance Coin',
+            'SOL-USD': 'Solana',
+            'XRP-USD': 'Ripple'
+        }
+        
+        assets = []
+        for symbol in symbols:
+            try:
+                ticker = yf.Ticker(symbol)
+                info = ticker.fast_info
+                current = float(info.last_price if hasattr(info, 'last_price') else 0)
+                prev_close = float(info.previous_close if hasattr(info, 'previous_close') else current)
+                change = ((current - prev_close) / prev_close * 100) if prev_close else 0
+                
+                if current == 0:
+                    logger.error(f"Got zero price for {symbol}, skipping")
+                    continue
+                    
+                assets.append({
+                    'symbol': symbol,
+                    'name': asset_names.get(symbol, symbol),
+                    'price': current,
+                    'change': round(change, 2)
+                })
+            except Exception as e:
+                logger.error(f"Error fetching data for {symbol}: {str(e)}")
+                continue
+        
+        if not assets:
+            return jsonify({'error': 'No asset data available'}), 500
+            
+        return jsonify(assets)
+    except Exception as e:
+        logger.error(f"Error fetching current prices: {str(e)}")
+        return jsonify({'error': 'Failed to fetch current prices'}), 500
+
+@app.route('/api/dashboard/graphs')
+def get_dashboard_graphs():
+    try:
+        # Get historical data for stocks
+        stock_data = []
+        for symbol in STOCKS[:5]:  # Only top 5 stocks
+            try:
+                ticker = yf.Ticker(symbol)
+                history = ticker.history(period='1d', interval='5m')
+                if not history.empty:
+                    stock_data.append({
+                        'x': [ts.strftime('%H:%M') for ts in history.index],
+                        'y': [float(price) for price in history['Close'].tolist()],
+                        'name': symbol,
+                        'type': 'scatter',
+                        'mode': 'lines+markers'
+                    })
+            except Exception as e:
+                logger.error(f"Error fetching stock data for {symbol}: {str(e)}")
+                continue
+        
+        # Get historical data for crypto
+        crypto_data = []
+        for symbol in CRYPTO[:5]:  # Only top 5 cryptos
+            try:
+                ticker = yf.Ticker(symbol)
+                history = ticker.history(period='1d', interval='5m')
+                if not history.empty:
+                    crypto_data.append({
+                        'x': [ts.strftime('%H:%M') for ts in history.index],
+                        'y': [float(price) for price in history['Close'].tolist()],
+                        'name': symbol,
+                        'type': 'scatter',
+                        'mode': 'lines+markers'
+                    })
+            except Exception as e:
+                logger.error(f"Error fetching crypto data for {symbol}: {str(e)}")
+                continue
+        
+        # Check if we have any data
+        if not stock_data and not crypto_data:
+            return jsonify({'error': 'No historical data available'}), 500
+
+        # Create graph configurations
+        stocks_layout = {
+            'title': 'Stock Performance (24h)',
+            'xaxis': {'title': 'Time'},
+            'yaxis': {'title': 'Price ($)'},
+            'showlegend': True,
+            'legend': {'orientation': 'h', 'y': -0.2},
+            'margin': {'l': 60, 'r': 30, 't': 40, 'b': 80},
+            'height': 500,  # Make it taller
+            'plot_bgcolor': '#ffffff',
+            'paper_bgcolor': '#ffffff',
+            'hovermode': 'x unified'  # Show all values at the same x position
+        }
+
+        crypto_layout = {
+            'title': 'Cryptocurrency Performance (24h)',
+            'xaxis': {'title': 'Time'},
+            'yaxis': {'title': 'Price ($)'},
+            'showlegend': True,
+            'legend': {'orientation': 'h', 'y': -0.2},
+            'margin': {'l': 60, 'r': 30, 't': 40, 'b': 80},
+            'height': 500,  # Make it taller
+            'plot_bgcolor': '#ffffff',
+            'paper_bgcolor': '#ffffff',
+            'hovermode': 'x unified'  # Show all values at the same x position
+        }
+
+        return jsonify({
+            'stocks': {
+                'data': stock_data,
+                'layout': stocks_layout
+            },
+            'crypto': {
+                'data': crypto_data,
+                'layout': crypto_layout
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error generating dashboard graphs: {str(e)}")
+        return jsonify({'error': 'Failed to generate graphs'}), 500
+
+@app.route('/api/dashboard/summary')
+def get_dashboard_summary():
+    try:
+        # Get market summary data
+        indices = {'^GSPC': 'S&P 500', '^IXIC': 'NASDAQ'}
+        market_data = {}
+        
+        for symbol, name in indices.items():
+            try:
+                ticker = yf.Ticker(symbol)
+                info = ticker.fast_info
+                current = float(info.last_price if hasattr(info, 'last_price') else 0)
+                prev_close = float(info.previous_close if hasattr(info, 'previous_close') else current)
+                change = ((current - prev_close) / prev_close * 100) if prev_close else 0
+                
+                market_data[name] = {
+                    'price': current,
+                    'change': round(change, 2)
+                }
+            except Exception as e:
+                logger.error(f"Error fetching data for {symbol}: {str(e)}")
+        
+        # Get top stocks and crypto from MongoDB
+        cutoff_time = datetime.utcnow() - timedelta(hours=24)
+        
+        # Get latest stock data
+        stocks = list(prices_collection.find({
+            'type': 'stock',
+            'timestamp': {'$gte': cutoff_time}
+        }).sort('timestamp', -1).limit(5))
+        
+        # Get latest crypto data
+        crypto = list(prices_collection.find({
+            'type': 'crypto',
+            'timestamp': {'$gte': cutoff_time}
+        }).sort('timestamp', -1).limit(5))
+        
+        return jsonify({
+            'market_indices': market_data,
+            'top_stocks': stocks,
+            'top_crypto': crypto
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching dashboard summary: {str(e)}")
+        return jsonify({'error': 'Failed to fetch dashboard data'}), 500
+
+# Add routes for dedicated views
+@app.route('/stocks')
+def stocks_view():
+    # Get user's saved stocks
+    saved_stocks = STOCKS  # Default list for now
     
-    return render_template('register.html')
+    # Fetch current data for saved stocks
+    stocks_data = []
+    for symbol in saved_stocks:
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.fast_info
+            current = float(info.last_price if hasattr(info, 'last_price') else 0)
+            prev_close = float(info.previous_close if hasattr(info, 'previous_close') else current)
+            change = ((current - prev_close) / prev_close * 100) if prev_close else 0
+            
+            stocks_data.append({
+                'symbol': symbol,
+                'price': current,
+                'change': round(change, 2)
+            })
+        except Exception as e:
+            logger.error(f"Error fetching data for {symbol}: {str(e)}")
+            continue
+    
+    return jsonify(stocks_data)
 
-@app.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    return redirect(url_for('login'))
+@app.route('/crypto')
+def crypto_view():
+    # Get user's saved cryptocurrencies
+    saved_crypto = CRYPTO  # Default list for now
+    
+    # Fetch current data for saved cryptocurrencies
+    crypto_data = []
+    for symbol in saved_crypto:
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.fast_info
+            current = float(info.last_price if hasattr(info, 'last_price') else 0)
+            prev_close = float(info.previous_close if hasattr(info, 'previous_close') else current)
+            change = ((current - prev_close) / prev_close * 100) if prev_close else 0
+            
+            crypto_data.append({
+                'symbol': symbol,
+                'price': current,
+                'change': round(change, 2)
+            })
+        except Exception as e:
+            logger.error(f"Error fetching data for {symbol}: {str(e)}")
+            continue
+    
+    return jsonify(crypto_data)
 
-@app.route('/profile')
-@login_required
-def profile():
-    return render_template('profile.html', user=current_user)
+@app.route('/lottery/saved')
+def lottery_saved():
+    try:
+        # Get saved lottery numbers from MongoDB
+        saved_numbers = {
+            'powerball': {
+                'numbers': ['05', '12', '23', '34', '45'],  # Default numbers for now
+                'powerball': '06'
+            },
+            'mega_millions': {
+                'numbers': ['08', '15', '27', '36', '49'],  # Default numbers for now
+                'mega_ball': '12'
+            }
+        }
+        
+        return jsonify(saved_numbers)
+    except Exception as e:
+        logger.error(f"Error fetching saved lottery numbers: {str(e)}")
+        return jsonify({'error': 'Failed to fetch saved lottery numbers'}), 500
 
 @app.route('/')
-@login_required
 def index():
-    """
-    Render the main page with default tracked assets.
-    """
-    return render_template(
-        'index.html',
-        default_crypto=DEFAULT_CRYPTO,
-        default_stocks=DEFAULT_STOCKS
-    )
-
-@app.route('/get_prices')
-@login_required
-def get_prices():
-    """
-    Endpoint to fetch prices for both cryptocurrencies and stocks.
-    """
-    crypto_symbols = request.args.get('crypto', '').strip()
-    stock_symbols = request.args.get('stocks', '').strip()
-    
-    prices = {}
-
-    # Fetch cryptocurrency prices
-    if crypto_symbols:
-        try:
-            crypto_list = crypto_symbols.split(',')
-            prices.update(get_crypto_prices(crypto_list))
-        except Exception as e:
-            logger.error(f"Error processing crypto symbols: {e}")
-    
-    # Fetch stock prices
-    if stock_symbols:
-        try:
-            stock_list = stock_symbols.split(',')
-            prices.update(get_stock_prices(stock_list))
-        except Exception as e:
-            logger.error(f"Error processing stock symbols: {e}")
-    
-    return jsonify(prices)
-
-@app.route('/search_coins')
-@login_required
-def search_coins():
-    """
-    Search for cryptocurrencies using CoinGecko API.
-    """
-    query = request.args.get('q', '')
-    if not query:
-        return jsonify([])
-    
-    try:
-        response = requests.get(f'https://api.coingecko.com/api/v3/search?query={query}')
-        response.raise_for_status()
-        data = response.json()
-        coins = data.get('coins', [])
-        return jsonify([{'id': coin['id'], 'name': coin['name']} for coin in coins[:5]])
-    except Exception as e:
-        logger.error(f"Error searching coins: {e}")
-        return jsonify([])
-
-@app.route('/search_stocks')
-@login_required
-def search_stocks():
-    """
-    Search for stocks using Yahoo Finance.
-    """
-    query = request.args.get('q', '')
-    if not query:
-        return jsonify([])
-    
-    try:
-        # For simplicity, just return the queried symbol as a stock
-        # You can enhance this with a proper stock search API if needed
-        return jsonify([{
-            'symbol': query.upper(),
-            'name': query.upper()
-        }])
-    except Exception as e:
-        logger.error(f"Error searching stocks: {e}")
-        return jsonify([])
+    return render_template('index.html')
 
 if __name__ == '__main__':
     app.run(debug=True)

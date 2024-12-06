@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="lottery-container">
+    <div class="lottery-header">
+        <h1><i class="fas fa-ticket-alt"></i> Latest Lottery Results</h1>
+    </div>
+
+    <div class="lottery-grid">
+        <!-- Powerball Section -->
+        <div class="lottery-card powerball" id="powerball-card">
+            <div class="lottery-title">
+                <i class="fas fa-power-off"></i>
+                <h2>Powerball</h2>
+            </div>
+            <div class="lottery-content">
+                <div class="loading-message">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>Loading results...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mega Millions Section -->
+        <div class="lottery-card mega-millions" id="mega-millions-card">
+            <div class="lottery-title">
+                <i class="fas fa-star"></i>
+                <h2>Mega Millions</h2>
+            </div>
+            <div class="lottery-content">
+                <div class="loading-message">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>Loading results...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="lottery-info">
+        <div class="info-grid">
+            <div class="info-card">
+                <h4>Draw Schedule</h4>
+                <p><strong>Powerball:</strong> Monday, Wednesday, and Saturday</p>
+                <p><strong>Mega Millions:</strong> Tuesday and Friday</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    fetchLotteryResults();
+    
+    // Refresh results every 5 minutes
+    setInterval(fetchLotteryResults, 5 * 60 * 1000);
+});
+
+function fetchLotteryResults() {
+    // Show loading state
+    document.getElementById('powerball-card').querySelector('.lottery-content').innerHTML = `
+        <div class="loading-message">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Loading results...</span>
+        </div>
+    `;
+    document.getElementById('mega-millions-card').querySelector('.lottery-content').innerHTML = `
+        <div class="loading-message">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Loading results...</span>
+        </div>
+    `;
+
+    fetch('/api/lottery/latest')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            updatePowerballCard(data.powerball);
+            updateMegaMillionsCard(data.mega_millions);
+        })
+        .catch(error => {
+            console.error('Error fetching lottery results:', error);
+            showError('powerball-card');
+            showError('mega-millions-card');
+        });
+}
+
+function updatePowerballCard(data) {
+    const card = document.getElementById('powerball-card');
+    if (!data || !data.winning_numbers) {
+        showError('powerball-card');
+        return;
+    }
+
+    card.innerHTML = `
+        <div class="lottery-title">
+            <i class="fas fa-power-off"></i>
+            <h2>Powerball</h2>
+        </div>
+        <div class="lottery-content">
+            <div class="draw-date">Draw Date: ${data.draw_date}</div>
+            <div class="numbers-container">
+                <div class="main-numbers">
+                    ${data.winning_numbers.map(number => 
+                        `<div class="lottery-number">${number}</div>`
+                    ).join('')}
+                </div>
+                <div class="powerball-number">${data.powerball}</div>
+            </div>
+            <div class="multiplier">Power Play: ${data.multiplier}x</div>
+            <div class="jackpot">
+                Estimated Jackpot: $${data.jackpot}
+            </div>
+        </div>
+    `;
+}
+
+function updateMegaMillionsCard(data) {
+    const card = document.getElementById('mega-millions-card');
+    if (!data || !data.winning_numbers) {
+        showError('mega-millions-card');
+        return;
+    }
+
+    card.innerHTML = `
+        <div class="lottery-title">
+            <i class="fas fa-star"></i>
+            <h2>Mega Millions</h2>
+        </div>
+        <div class="lottery-content">
+            <div class="draw-date">Draw Date: ${data.draw_date}</div>
+            <div class="numbers-container">
+                <div class="main-numbers">
+                    ${data.winning_numbers.map(number => 
+                        `<div class="lottery-number">${number}</div>`
+                    ).join('')}
+                </div>
+                <div class="mega-ball">${data.mega_ball}</div>
+            </div>
+            <div class="multiplier">Megaplier: ${data.multiplier}x</div>
+            <div class="jackpot">
+                Estimated Jackpot: $${data.jackpot}
+            </div>
+        </div>
+    `;
+}
+
+function showError(cardId) {
+    const card = document.getElementById(cardId);
+    if (card) {
+        const content = card.querySelector('.lottery-content');
+        if (content) {
+            content.innerHTML = `
+                <div class="error-message">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span>Unable to load lottery results. Please try again later.</span>
+                </div>
+            `;
+        }
+    }
+}
+</script>
+{% endblock %}

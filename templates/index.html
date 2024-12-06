@@ -3,54 +3,220 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StockStream - Real-time Stock and Crypto Tracker</title>
+    <title>StockStream - Market Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background-color: #fff;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .nav-brand {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .nav-tabs {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #fff;
+            cursor: pointer;
+        }
+
+        .tab-btn.active {
+            background-color: #007bff;
+            color: #fff;
+        }
+
+        .tab-content {
+            padding: 20px;
+        }
+
+        .tab-pane {
+            display: none;
+        }
+
+        .tab-pane.active {
+            display: block;
+        }
+
+        .dashboard-layout {
+            display: grid;
+            grid-template-columns: 1fr 3fr;
+            gap: 20px;
+        }
+
+        .sidebar {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+        }
+
+        .watchlist {
+            margin-bottom: 20px;
+        }
+
+        .watchlist h2 {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+        }
+
+        .main-content {
+            padding: 20px;
+        }
+
+        .graphs-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .graph-card {
+            background-color: #fff;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .graph-card h2 {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+        }
+
+        .profile-container {
+            padding: 20px;
+        }
+
+        .profile-info {
+            margin-top: 20px;
+        }
+
+        .lottery-container {
+            padding: 20px;
+        }
+
+        .lottery-results {
+            margin-top: 20px;
+        }
+
+        .loading {
+            text-align: center;
+            margin-top: 20px;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1><i class="fas fa-chart-line"></i> StockStream</h1>
-            <p>Real-time Stock and Crypto Tracker</p>
-        </div>
-
-        <div class="search-container">
-            <div class="search-wrapper">
-                <i class="fas fa-search search-icon"></i>
-                <input type="text" 
-                       id="searchInput" 
-                       class="search-input" 
-                       placeholder="Search for stocks or cryptocurrencies..."
-                       autocomplete="off">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-brand">StockStream</div>
+            <div class="nav-tabs">
+                <button class="tab-btn active" data-tab="dashboard">
+                    <i class="fas fa-chart-line"></i> Dashboard
+                </button>
+                <button class="tab-btn" data-tab="profile">
+                    <i class="fas fa-user"></i> Profile
+                </button>
+                <button class="tab-btn" data-tab="lottery">
+                    <i class="fas fa-ticket"></i> Lottery
+                </button>
             </div>
-            <div id="searchResults" class="search-results"></div>
-        </div>
+        </nav>
 
-        <div class="grid-container">
-            <h2 class="section-title">
-                <i class="fab fa-bitcoin"></i>
-                Cryptocurrencies
-            </h2>
-            <div id="cryptoGrid" class="grid">
-                <!-- Crypto cards will be added here -->
+        <!-- Tab Content -->
+        <div class="tab-content">
+            <!-- Dashboard Tab -->
+            <div id="dashboard" class="tab-pane active">
+                <div class="dashboard-layout">
+                    <div class="sidebar">
+                        <div class="watchlist">
+                            <h2>Top 5 Stocks</h2>
+                            <div id="stocks-watchlist">
+                                <div class="loading">Loading stocks...</div>
+                            </div>
+                        </div>
+                        <div class="watchlist">
+                            <h2>Top 5 Cryptocurrencies</h2>
+                            <div id="crypto-watchlist">
+                                <div class="loading">Loading cryptocurrencies...</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="main-content">
+                        <div class="graphs-container">
+                            <div class="graph-card">
+                                <h2>Stock Performance (24h)</h2>
+                                <div id="stocks-graph"></div>
+                            </div>
+                            <div class="graph-card">
+                                <h2>Crypto Performance (24h)</h2>
+                                <div id="crypto-graph"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <h2 class="section-title">
-                <i class="fas fa-chart-bar"></i>
-                Stocks
-            </h2>
-            <div id="stockGrid" class="grid">
-                <!-- Stock cards will be added here -->
+            <!-- Profile Tab -->
+            <div id="profile" class="tab-pane">
+                <div class="profile-container">
+                    <h1>Profile</h1>
+                    <div class="profile-info">
+                        <p>Welcome to your StockStream profile!</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lottery Tab -->
+            <div id="lottery" class="tab-pane">
+                <div class="lottery-container">
+                    <h1>Lottery Results</h1>
+                    <div id="lottery-results">
+                        <div class="loading">Loading lottery results...</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <script>
-        // Pass the default values from Flask to JavaScript
-        const defaultCrypto = '{{ default_crypto | tojson | safe }}';
-        const defaultStocks = '{{ default_stocks | tojson | safe }}';
-    </script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

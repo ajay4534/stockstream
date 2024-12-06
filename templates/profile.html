@@ -9,6 +9,28 @@
         </div>
         
         <div class="profile-section">
+            <h3><i class="fas fa-user"></i> Personal Information</h3>
+            <form class="profile-form" method="POST" action="{{ url_for('update_profile') }}">
+                <div class="form-group">
+                    <label for="first_name">First Name</label>
+                    <input type="text" id="first_name" name="first_name" 
+                           value="{{ current_user.user_data.first_name if current_user.user_data.first_name }}">
+                </div>
+                <div class="form-group">
+                    <label for="last_name">Last Name</label>
+                    <input type="text" id="last_name" name="last_name" 
+                           value="{{ current_user.user_data.last_name if current_user.user_data.last_name }}">
+                </div>
+                <div class="form-group">
+                    <label for="phone">Phone Number</label>
+                    <input type="tel" id="phone" name="phone" 
+                           value="{{ current_user.user_data.phone if current_user.user_data.phone }}">
+                </div>
+                <button type="submit" class="save-profile">Save Profile</button>
+            </form>
+        </div>
+        
+        <div class="profile-section">
             <h3><i class="fas fa-star"></i> Your Watchlist</h3>
             <div class="watchlist-grid">
                 {% if current_user.user_data.watchlist %}
@@ -16,7 +38,7 @@
                         <div class="watchlist-item">
                             <span class="asset-symbol">{{ asset.symbol }}</span>
                             <span class="asset-type">{{ asset.type }}</span>
-                            <button class="remove-asset" data-symbol="{{ asset.symbol }}">
+                            <button class="remove-asset" data-symbol="{{ asset.symbol }}" data-type="{{ asset.type }}">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
@@ -47,4 +69,33 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle watchlist item removal
+    document.querySelectorAll('.remove-asset').forEach(button => {
+        button.addEventListener('click', async function() {
+            const symbol = this.dataset.symbol;
+            const type = this.dataset.type;
+            try {
+                const response = await fetch('/api/watchlist/remove', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ symbol, type })
+                });
+                if (response.ok) {
+                    this.closest('.watchlist-item').remove();
+                    if (document.querySelectorAll('.watchlist-item').length === 0) {
+                        document.querySelector('.watchlist-grid').innerHTML = '<p class="no-assets">No assets in watchlist</p>';
+                    }
+                }
+            } catch (error) {
+                console.error('Error removing asset:', error);
+            }
+        });
+    });
+});
+</script>
 {% endblock %}
