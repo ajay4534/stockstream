@@ -94,29 +94,26 @@ function fetchLotteryResults() {
 
 function updatePowerballCard(data) {
     const card = document.getElementById('powerball-card');
-    if (!data || !data.winning_numbers) {
+    if (!data) {
         showError('powerball-card');
         return;
     }
 
-    card.innerHTML = `
-        <div class="lottery-title">
-            <i class="fas fa-power-off"></i>
-            <h2>Powerball</h2>
-        </div>
-        <div class="lottery-content">
-            <div class="draw-date">Draw Date: ${data.draw_date}</div>
-            <div class="numbers-container">
-                <div class="main-numbers">
-                    ${data.winning_numbers.map(number => 
-                        `<div class="lottery-number">${number}</div>`
-                    ).join('')}
-                </div>
-                <div class="powerball-number">${data.powerball}</div>
+    card.querySelector('.lottery-content').innerHTML = `
+        <div class="lottery-results">
+            <div class="draw-section old-draw">
+                <h4>Previous Draw (${data.old_draw_date})</h4>
+                <div class="numbers">${data.old_numbers}</div>
+                <div class="special-ball">Powerball: ${data.old_powerball}</div>
             </div>
-            <div class="multiplier">Power Play: ${data.multiplier}x</div>
-            <div class="jackpot">
-                Estimated Jackpot: $${data.jackpot}
+            <div class="draw-section latest-draw">
+                <h4>Latest Draw (${data.latest_draw_date})</h4>
+                <div class="numbers">${data.latest_numbers}</div>
+                <div class="special-ball">Powerball: ${data.latest_powerball}</div>
+            </div>
+            <div class="draw-section next-draw">
+                <h4>Next Draw (${data.next_draw_date})</h4>
+                <div class="estimated-jackpot">Estimated Jackpot: ${data.estimated_jackpot}</div>
             </div>
         </div>
     `;
@@ -124,29 +121,26 @@ function updatePowerballCard(data) {
 
 function updateMegaMillionsCard(data) {
     const card = document.getElementById('mega-millions-card');
-    if (!data || !data.winning_numbers) {
+    if (!data) {
         showError('mega-millions-card');
         return;
     }
 
-    card.innerHTML = `
-        <div class="lottery-title">
-            <i class="fas fa-star"></i>
-            <h2>Mega Millions</h2>
-        </div>
-        <div class="lottery-content">
-            <div class="draw-date">Draw Date: ${data.draw_date}</div>
-            <div class="numbers-container">
-                <div class="main-numbers">
-                    ${data.winning_numbers.map(number => 
-                        `<div class="lottery-number">${number}</div>`
-                    ).join('')}
-                </div>
-                <div class="mega-ball">${data.mega_ball}</div>
+    card.querySelector('.lottery-content').innerHTML = `
+        <div class="lottery-results">
+            <div class="draw-section old-draw">
+                <h4>Previous Draw (${data.old_draw_date})</h4>
+                <div class="numbers">${data.old_numbers}</div>
+                <div class="special-ball">Mega Ball: ${data.old_mega_ball}</div>
             </div>
-            <div class="multiplier">Megaplier: ${data.multiplier}x</div>
-            <div class="jackpot">
-                Estimated Jackpot: $${data.jackpot}
+            <div class="draw-section latest-draw">
+                <h4>Latest Draw (${data.latest_draw_date})</h4>
+                <div class="numbers">${data.latest_numbers}</div>
+                <div class="special-ball">Mega Ball: ${data.latest_mega_ball}</div>
+            </div>
+            <div class="draw-section next-draw">
+                <h4>Next Draw (${data.next_draw_date})</h4>
+                <div class="estimated-jackpot">Estimated Jackpot: ${data.estimated_jackpot}</div>
             </div>
         </div>
     `;
@@ -154,17 +148,12 @@ function updateMegaMillionsCard(data) {
 
 function showError(cardId) {
     const card = document.getElementById(cardId);
-    if (card) {
-        const content = card.querySelector('.lottery-content');
-        if (content) {
-            content.innerHTML = `
-                <div class="error-message">
-                    <i class="fas fa-exclamation-circle"></i>
-                    <span>Unable to load lottery results. Please try again later.</span>
-                </div>
-            `;
-        }
-    }
+    card.querySelector('.lottery-content').innerHTML = `
+        <div class="error-message">
+            <i class="fas fa-exclamation-circle"></i>
+            <span>Failed to load lottery results</span>
+        </div>
+    `;
 }
 </script>
 {% endblock %}

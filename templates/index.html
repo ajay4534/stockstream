@@ -77,24 +77,8 @@
 
         .dashboard-layout {
             display: grid;
-            grid-template-columns: 1fr 3fr;
+            grid-template-columns: 1fr;
             gap: 20px;
-        }
-
-        .sidebar {
-            background-color: #f8f9fa;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 10px;
-        }
-
-        .watchlist {
-            margin-bottom: 20px;
-        }
-
-        .watchlist h2 {
-            font-size: 1.2rem;
-            margin-bottom: 10px;
         }
 
         .main-content {
@@ -116,6 +100,25 @@
         }
 
         .graph-card h2 {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+        }
+
+        .watchlists-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .watchlist-card {
+            background-color: #fff;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .watchlist-card h2 {
             font-size: 1.2rem;
             margin-bottom: 10px;
         }
@@ -146,7 +149,10 @@
     <div class="container">
         <!-- Navigation -->
         <nav class="navbar">
-            <div class="nav-brand">StockStream</div>
+            <div class="nav-brand">
+                <i class="fas fa-chart-bar"></i>
+                StockStream
+            </div>
             <div class="nav-tabs">
                 <button class="tab-btn active" data-tab="dashboard">
                     <i class="fas fa-chart-line"></i> Dashboard
@@ -155,7 +161,7 @@
                     <i class="fas fa-user"></i> Profile
                 </button>
                 <button class="tab-btn" data-tab="lottery">
-                    <i class="fas fa-ticket"></i> Lottery
+                    <i class="fas fa-ticket-alt"></i> Lottery
                 </button>
             </div>
         </nav>
@@ -165,20 +171,6 @@
             <!-- Dashboard Tab -->
             <div id="dashboard" class="tab-pane active">
                 <div class="dashboard-layout">
-                    <div class="sidebar">
-                        <div class="watchlist">
-                            <h2>Top 5 Stocks</h2>
-                            <div id="stocks-watchlist">
-                                <div class="loading">Loading stocks...</div>
-                            </div>
-                        </div>
-                        <div class="watchlist">
-                            <h2>Top 5 Cryptocurrencies</h2>
-                            <div id="crypto-watchlist">
-                                <div class="loading">Loading cryptocurrencies...</div>
-                            </div>
-                        </div>
-                    </div>
                     <div class="main-content">
                         <div class="graphs-container">
                             <div class="graph-card">
@@ -188,6 +180,20 @@
                             <div class="graph-card">
                                 <h2>Crypto Performance (24h)</h2>
                                 <div id="crypto-graph"></div>
+                            </div>
+                        </div>
+                        <div class="watchlists-container">
+                            <div class="watchlist-card">
+                                <h2>Top 5 Stocks</h2>
+                                <div id="stocks-watchlist">
+                                    <div class="loading">Loading stocks...</div>
+                                </div>
+                            </div>
+                            <div class="watchlist-card">
+                                <h2>Top 5 Cryptocurrencies</h2>
+                                <div id="crypto-watchlist">
+                                    <div class="loading">Loading cryptocurrencies...</div>
+                                </div>
                             </div>
                         </div>
                     </div>

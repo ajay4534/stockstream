@@ -183,30 +183,34 @@ def crypto_search():
         return jsonify({'error': 'Failed to search cryptocurrencies'}), 500
 
 @app.route('/api/lottery/latest')
-def get_latest_lottery():
+def get_lottery_results():
     try:
-        # For demo purposes, return static lottery data
-        # In a real app, this would come from an API or database
-        lottery_data = {
-            "powerball": {
-                "drawDate": datetime.now().strftime("%Y-%m-%d"),
-                "numbers": [7, 15, 23, 32, 45],
-                "powerball": 12,
-                "nextDraw": (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d"),
-                "estimatedJackpot": "80 Million"
+        current_date = datetime(2024, 12, 7, 13, 56, 23)  # Using the provided time
+        mock_data = {
+            'powerball': {
+                'old_draw_date': '2024-12-04',  # Previous Wednesday
+                'old_numbers': '02 11 22 35 60',
+                'old_powerball': '23',
+                'latest_draw_date': '2024-12-06',  # Latest Friday
+                'latest_numbers': '12 24 36 48 60',
+                'latest_powerball': '15',
+                'next_draw_date': '2024-12-09',  # Next Monday
+                'estimated_jackpot': '$815 Million'
             },
-            "megaMillions": {
-                "drawDate": datetime.now().strftime("%Y-%m-%d"),
-                "numbers": [3, 19, 28, 37, 51],
-                "megaBall": 8,
-                "nextDraw": (datetime.now() + timedelta(days=4)).strftime("%Y-%m-%d"),
-                "estimatedJackpot": "95 Million"
+            'mega_millions': {
+                'old_draw_date': '2024-12-03',  # Previous Tuesday
+                'old_numbers': '15 28 37 49 65',
+                'old_mega_ball': '12',
+                'latest_draw_date': '2024-12-06',  # Latest Friday
+                'latest_numbers': '07 15 29 38 42',
+                'latest_mega_ball': '18',
+                'next_draw_date': '2024-12-10',  # Next Tuesday
+                'estimated_jackpot': '$415 Million'
             }
         }
-        return jsonify(lottery_data)
+        return jsonify(mock_data)
     except Exception as e:
-        logger.error(f"Error fetching lottery data: {str(e)}")
-        return jsonify({'error': 'Failed to fetch lottery data'}), 500
+        return jsonify({'error': str(e)}), 500
 
 # Price data routes
 @app.route('/api/current_prices')

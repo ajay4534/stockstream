@@ -49,20 +49,22 @@ async function updateStocksWatchlist() {
         
         const watchlist = document.getElementById('stocks-watchlist');
         if (watchlist && stocks && !stocks.error) {
-            watchlist.innerHTML = stocks.map(stock => `
-                <div class="asset-item">
-                    <div class="asset-info">
-                        <div class="asset-symbol">${stock.symbol}</div>
-                        <div class="asset-name">${stock.name || stock.symbol}</div>
-                    </div>
-                    <div class="asset-data">
-                        <div class="asset-price">$${stock.price.toFixed(2)}</div>
-                        <div class="asset-change ${stock.change >= 0 ? 'positive' : 'negative'}">
-                            ${stock.change >= 0 ? '+' : ''}${stock.change.toFixed(2)}%
+            let html = '';
+            stocks.forEach(stock => {
+                const changeColor = stock.change >= 0 ? 'green' : 'red';
+                html += `
+                    <div class="watchlist-item">
+                        <div class="d-flex justify-content-between">
+                            <strong>${stock.symbol}</strong>
+                            <span>$${stock.price.toFixed(2)}</span>
+                        </div>
+                        <div class="price-info" style="color: ${changeColor}">
+                            ${(stock.change * 100).toFixed(2)}%
                         </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            });
+            watchlist.innerHTML = html;
         } else if (stocks.error) {
             watchlist.innerHTML = '<div class="error">Failed to load stocks</div>';
         }
@@ -83,20 +85,22 @@ async function updateCryptoWatchlist() {
         
         const watchlist = document.getElementById('crypto-watchlist');
         if (watchlist && cryptos && !cryptos.error) {
-            watchlist.innerHTML = cryptos.map(crypto => `
-                <div class="asset-item">
-                    <div class="asset-info">
-                        <div class="asset-symbol">${crypto.symbol}</div>
-                        <div class="asset-name">${crypto.name || crypto.symbol}</div>
-                    </div>
-                    <div class="asset-data">
-                        <div class="asset-price">$${crypto.price.toFixed(2)}</div>
-                        <div class="asset-change ${crypto.change >= 0 ? 'positive' : 'negative'}">
-                            ${crypto.change >= 0 ? '+' : ''}${crypto.change.toFixed(2)}%
+            let html = '';
+            cryptos.forEach(crypto => {
+                const changeColor = crypto.change >= 0 ? 'green' : 'red';
+                html += `
+                    <div class="watchlist-item">
+                        <div class="d-flex justify-content-between">
+                            <strong>${crypto.symbol}</strong>
+                            <span>$${crypto.price.toFixed(2)}</span>
+                        </div>
+                        <div class="price-info" style="color: ${changeColor}">
+                            ${(crypto.change * 100).toFixed(2)}%
                         </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            });
+            watchlist.innerHTML = html;
         } else if (cryptos.error) {
             watchlist.innerHTML = '<div class="error">Failed to load cryptocurrencies</div>';
         }
@@ -113,11 +117,11 @@ async function updateCryptoWatchlist() {
 async function updateLotteryData() {
     try {
         const response = await fetch('/api/lottery/latest');
-        const data = await response.json();
-        
-        const lotteryResults = document.getElementById('lottery-results');
-        
-        if (lotteryResults) {
+        if (response.ok) {
+            const data = await response.json();
+            const lotteryResults = document.getElementById('lottery-results');
+            if (!lotteryResults) return;
+
             if (data.error) {
                 lotteryResults.innerHTML = '<div class="error">Failed to load lottery results</div>';
             } else {
@@ -126,28 +130,40 @@ async function updateLotteryData() {
                         <div class="lottery-card">
                             <h2>Powerball</h2>
                             <div class="lottery-info">
-                                <p><strong>Draw Date:</strong> ${data.powerball.drawDate}</p>
-                                <p><strong>Winning Numbers:</strong></p>
-                                <div class="lottery-numbers">
-                                    ${data.powerball.numbers.map(num => `<span class="lottery-number">${num}</span>`).join('')}
-                                    <span class="lottery-number powerball">${data.powerball.powerball}</span>
+                                <div class="draw-section old-draw">
+                                    <h4>Previous Draw (${data.powerball.old_draw_date})</h4>
+                                    <div class="numbers">${data.powerball.old_numbers}</div>
+                                    <div class="special-ball">Powerball: ${data.powerball.old_powerball}</div>
                                 </div>
-                                <p><strong>Next Draw:</strong> ${data.powerball.nextDraw}</p>
-                                <p><strong>Estimated Jackpot:</strong> $${data.powerball.estimatedJackpot}</p>
+                                <div class="draw-section latest-draw">
+                                    <h4>Latest Draw (${data.powerball.latest_draw_date})</h4>
+                                    <div class="numbers">${data.powerball.latest_numbers}</div>
+                                    <div class="special-ball">Powerball: ${data.powerball.latest_powerball}</div>
+                                </div>
+                                <div class="draw-section next-draw">
+                                    <h4>Next Draw (${data.powerball.next_draw_date})</h4>
+                                    <div class="estimated-jackpot">Estimated Jackpot: ${data.powerball.estimated_jackpot}</div>
+                                </div>
                             </div>
                         </div>
                         
                         <div class="lottery-card">
                             <h2>Mega Millions</h2>
                             <div class="lottery-info">
-                                <p><strong>Draw Date:</strong> ${data.megaMillions.drawDate}</p>
-                                <p><strong>Winning Numbers:</strong></p>
-                                <div class="lottery-numbers">
-                                    ${data.megaMillions.numbers.map(num => `<span class="lottery-number">${num}</span>`).join('')}
-                                    <span class="lottery-number mega-ball">${data.megaMillions.megaBall}</span>
+                                <div class="draw-section old-draw">
+                                    <h4>Previous Draw (${data.mega_millions.old_draw_date})</h4>
+                                    <div class="numbers">${data.mega_millions.old_numbers}</div>
+                                    <div class="special-ball">Mega Ball: ${data.mega_millions.old_mega_ball}</div>
                                 </div>
-                                <p><strong>Next Draw:</strong> ${data.megaMillions.nextDraw}</p>
-                                <p><strong>Estimated Jackpot:</strong> $${data.megaMillions.estimatedJackpot}</p>
+                                <div class="draw-section latest-draw">
+                                    <h4>Latest Draw (${data.mega_millions.latest_draw_date})</h4>
+                                    <div class="numbers">${data.mega_millions.latest_numbers}</div>
+                                    <div class="special-ball">Mega Ball: ${data.mega_millions.latest_mega_ball}</div>
+                                </div>
+                                <div class="draw-section next-draw">
+                                    <h4>Next Draw (${data.mega_millions.next_draw_date})</h4>
+                                    <div class="estimated-jackpot">Estimated Jackpot: ${data.mega_millions.estimated_jackpot}</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -169,16 +185,58 @@ async function updateGraphs() {
         const response = await fetch('/api/dashboard/graphs');
         const graphs = await response.json();
         
-        // Update stocks graph
-        const stocksGraph = document.getElementById('stocks-graph');
-        if (stocksGraph && graphs.stocks) {
-            Plotly.newPlot('stocks-graph', graphs.stocks.data, graphs.stocks.layout);
+        // Stock performance graph
+        const stocksGraphDiv = document.getElementById('stocks-graph');
+        if (stocksGraphDiv) {
+            const stockLayout = {
+                title: '',
+                showlegend: true,
+                height: 240,  // Reduced height
+                margin: { t: 10, l: 40, r: 10, b: 30 },  // Compact margins
+                xaxis: {
+                    showgrid: false,
+                    zeroline: false
+                },
+                yaxis: {
+                    showgrid: true,
+                    zeroline: false,
+                    tickformat: '.2%'  // Format as percentage
+                },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: {
+                    size: 10  // Smaller font size
+                }
+            };
+            
+            Plotly.newPlot('stocks-graph', graphs.stocks.data, stockLayout);
         }
         
-        // Update crypto graph
-        const cryptoGraph = document.getElementById('crypto-graph');
-        if (cryptoGraph && graphs.crypto) {
-            Plotly.newPlot('crypto-graph', graphs.crypto.data, graphs.crypto.layout);
+        // Crypto performance graph
+        const cryptoGraphDiv = document.getElementById('crypto-graph');
+        if (cryptoGraphDiv) {
+            const cryptoLayout = {
+                title: '',
+                showlegend: true,
+                height: 240,  // Reduced height
+                margin: { t: 10, l: 40, r: 10, b: 30 },  // Compact margins
+                xaxis: {
+                    showgrid: false,
+                    zeroline: false
+                },
+                yaxis: {
+                    showgrid: true,
+                    zeroline: false,
+                    tickformat: '.2%'  // Format as percentage
+                },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: {
+                    size: 10  // Smaller font size
+                }
+            };
+            
+            Plotly.newPlot('crypto-graph', graphs.crypto.data, cryptoLayout);
         }
     } catch (error) {
         console.error('Error updating graphs:', error);
